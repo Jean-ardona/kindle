@@ -64,6 +64,8 @@ Without a key, everything still works except cross-language merging and translat
 
 Chat enters Kindle through a single `ingestMessage` function. The simulator and the Twitch connection feed the same function, so the rest of the app does not change.
 
+Kindle reads a channel's live chat through Twitch's chat interface (IRC over TLS, anonymous read-only connection). Set TWITCH_CHANNEL in `.env` to your channel name and restart. Every chat message goes through the same `ingestMessage` function as the simulator. First-time chatters (Twitch's `first-msg` tag) feed the "New in chat" card. The panel header shows the connection state. Kindle never sends messages, so no login or token is needed.
+
 ## How Codex was used
 
 The whole project was built in a single Codex thread: the streamer panel and its design system, the backend and live event stream, the duplicate merger, the AI layer with its failure handling, the overlay, and the simulator. Each step was a focused prompt, tested in the browser before the next one.
