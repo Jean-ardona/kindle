@@ -10,6 +10,7 @@ let onScreenId = null;
 let theme = 'twitch';
 let lessAnimation = false;
 let streamerLang = 'fr';
+let twitchStatus = { status: 'off', channel: null };
 const keyFor = (username) => username.trim().toLocaleLowerCase();
 function addBotMessage(message) {
   botLog.push({ id: Date.now() + Math.random(), text: message, createdAt: new Date().toISOString() });
@@ -29,6 +30,7 @@ function snapshot() {
     lessAnimation,
     aiStatus: getAiStatus(),
     streamerLang,
+    twitchStatus: { ...twitchStatus },
   };
 }
 function publish() {
@@ -38,6 +40,20 @@ function publish() {
 function subscribe(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+function markFirstTimeChatter(username) {
+  if (typeof username !== 'string' || !username.trim()) return;
+  const author = username.trim().slice(0, 80);
+  const key = keyFor(author);
+  if (newcomers.some((person) => person.key === key)) return;
+  newcomers.push({ key, username: author, greeted: false, createdAt: new Date().toISOString() });
+  publish();
+}
+function setTwitchStatus(status, channel = null) {
+  const next = { status, channel: status === 'connected' ? channel : null };
+  if (twitchStatus.status === next.status && twitchStatus.channel === next.channel) return;
+  twitchStatus = next;
+  publish();
 }
 subscribeStatus(() => publish());
 function mergeInto(question, message) {
@@ -180,4 +196,4 @@ function reset() {
   publish();
   return snapshot();
 }
-module.exports = { ingestMessage, snapshot, subscribe, setQuestionStatus, splitMergedMessage, greetNewcomer, setOnScreen, clearScreen, setTheme, setLessAnimation, setStreamerLang, reset };
+module.exports = { ingestMessage, snapshot, subscribe, setQuestionStatus, splitMergedMessage, greetNewcomer, setOnScreen, clearScreen, setTheme, setLessAnimation, setStreamerLang, markFirstTimeChatter, setTwitchStatus, reset };

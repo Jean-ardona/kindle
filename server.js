@@ -97,6 +97,9 @@ function createServer() {
 }
 if (require.main === module) {
   const port = Number(process.env.PORT || 3000);
-  createServer().listen(port, () => console.log('Kindle is running at http://localhost:' + port + '/panel'));
+  createServer().listen(port, () => {
+    console.log('Kindle is running at http://localhost:' + port + '/panel');
+    require('./twitch').startTwitchChat();
+  });
 }
 module.exports = { createServer, ingestMessage };
