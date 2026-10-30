@@ -90,7 +90,8 @@ async function requestGemini(question, openQuestions, streamerLang) {
     }
     return result;
   } catch (error) {
-    console.warn('[AI] Gemini network error: ' + safeLogText(error && error.message, apiKey));
+    const causeCode = error && error.cause && error.cause.code;
+    console.warn('[AI] Gemini network error' + (causeCode ? ' (' + causeCode + ')' : '') + ': ' + safeLogText(error && error.message, apiKey));
     return null;
   } finally { if (timeout) clearTimeout(timeout); }
 }

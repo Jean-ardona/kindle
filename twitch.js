@@ -11,6 +11,26 @@ function decodeTag(value) {
   return String(value || '').replace(/\\:/g, ';').replace(/\\s/g, ' ').replace(/\\r/g, '\r').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
 }
 
+function checkTwitchServerIdentity(servername, cert) {
+  const originalError = tls.checkServerIdentity(servername, cert);
+  if (!originalError) return undefined;
+
+  const names = [];
+  const commonName = cert && cert.subject && cert.subject.CN;
+  if (Array.isArray(commonName)) names.push(...commonName);
+  else if (commonName) names.push(commonName);
+  const subjectAltName = cert && cert.subjectaltname || '';
+  for (const entry of subjectAltName.matchAll(/(?:^|,\s*)DNS:([^,]+)/g)) names.push(entry[1].trim().replace(/^"|"$/g, ''));
+
+  const trustedSuffixes = ['.twitch.tv', '.twitch.a2z.com'];
+  const acceptedName = names.find((name) => trustedSuffixes.some((suffix) => String(name).toLocaleLowerCase().endsWith(suffix)));
+  if (acceptedName) {
+    console.warn('[Twitch] Accepted alternate TLS certificate name: ' + acceptedName);
+    return undefined;
+  }
+  return originalError;
+}
+
 function startTwitchChat() {
   const channel = String(process.env.TWITCH_CHANNEL || '').trim().replace(/^#/, '').toLocaleLowerCase();
   if (!channel) {
@@ -28,7 +48,6 @@ function startTwitchChat() {
 
   function scheduleReconnect() {
     if (stopped || reconnectTimer) return;
-    setTwitchStatus('connecting');
     const delay = reconnectDelay;
     reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_MS);
     reconnectTimer = setTimeout(() => {
@@ -73,8 +92,13 @@ function startTwitchChat() {
     nickname = 'justinfan' + Math.floor(10000 + Math.random() * 90000);
     const decoder = new StringDecoder('utf8');
     let buffer = '';
-    socket = tls.connect({ host: HOST, port: PORT, servername: HOST });
-    socket.setTimeout(15000, () => socket.destroy(new Error('IRC connection timed out')));
+    let attemptErrorLogged = false;
+    socket = tls.connect({ host: HOST, port: PORT, servername: HOST, checkServerIdentity: checkTwitchServerIdentity });
+    socket.setTimeout(15000, () => {
+      const error = new Error('IRC connection timed out');
+      error.code = 'ETIMEDOUT';
+      socket.destroy(error);
+    });
     socket.on('secureConnect', () => {
       socket.setTimeout(0);
       socket.write('CAP REQ :twitch.tv/tags\r\n');
@@ -94,13 +118,20 @@ function startTwitchChat() {
       if (buffer.length > 16384) buffer = '';
     });
     socket.on('error', (error) => {
-      if (!stopped) console.warn('[Twitch] IRC connection error:', error.message);
+      if (!stopped) {
+        setTwitchStatus('error');
+        if (!attemptErrorLogged) {
+          attemptErrorLogged = true;
+          console.warn('[Twitch] IRC connection error: ' + (error.code || 'UNKNOWN'));
+        }
+      }
     });
     socket.on('close', () => {
       if (closeHandled) return;
       closeHandled = true;
       socket = null;
       joined = false;
+      if (!attemptErrorLogged) setTwitchStatus('connecting');
       scheduleReconnect();
     });
   }
